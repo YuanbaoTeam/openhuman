@@ -159,7 +159,7 @@ Custom archetypes ship as TOML files under `$OPENHUMAN_WORKSPACE/agents/*.toml` 
 When the orchestrator calls `spawn_subagent` (or one of the `delegate_*` convenience tools), the runner:
 
 1. Reads the parent's execution context from a task-local - the parent's provider, sandbox mode, cancellation fence, transcript root.
-2. Resolves the sub-agent's model - inherit from parent, follow a hint (`fast` / `reasoning` / `summarization`), or pin an exact model.
+2. Resolves the sub-agent's model - inline `model` override first, then config-level pins (`[orchestrator].model`, `[teams.*].lead_model`, `[teams.*].agent_model`), then the archetype hint or inherited parent model.
 3. Filters the parent's tool registry per the definition's `tools`, `disallowed_tools`, and `skill_filter`. In `fork` mode, the parent's full registry is inherited verbatim.
 4. Builds a narrow system prompt, omitting the sections the definition asks to strip.
 5. Runs an inner tool-call loop using the same machinery as the parent.
@@ -199,9 +199,9 @@ Each `AgentDefinition` carries an `agent_tier` field (`chat` / `reasoning` / `wo
 **Enforcement.** Two layers:
 
 1. **Loader-time (static).** [`agents::loader::validate_tier_hierarchy`](../../../src/openhuman/agent/agents/loader.rs) runs over the merged registry (built-ins + workspace TOMLs) and refuses to boot a registry that lists a same-tier or worker-with-subagents entry. Built-in archetypes are checked at compile-test time; user-shipped TOMLs are checked at workspace load.
-2. **Runtime depth gate (dynamic, planned).** Independent of tier, the sub-agent runner *will* cap total spawn chain depth at `MAX_SPAWN_DEPTH = 3` via a task-local counter incremented across `run_subagent`, surfaced as a new `SpawnDepthExceeded` agent error. This makes a user-shipped TOML that drops the tier annotation still unable to recurse past three hops. Tracked as the follow-up to the gap noted in `harness_gap_tests.rs`.
+2. **Runtime depth gate (dynamic).** Independent of tier, the sub-agent runner caps total spawn chain depth at `MAX_SPAWN_DEPTH = 3` via a task-local counter incremented across `run_subagent`, surfaced as a `SpawnDepthExceeded` agent error. This makes a user-shipped TOML that drops the tier annotation still unable to recurse past three hops.
 
-> **Status:** the loader-time tier check and `agent_tier` field are live (this section). The runtime depth-counter task-local is *not yet implemented* — it is the planned defence-in-depth layer described above. Until it lands, depth is bounded only by the static loader contract plus the prompt-level rules in the orchestrator and planner agents.
+> **Status:** the loader-time tier check, `agent_tier` field, and runtime depth-counter task-local are live. Depth is bounded by both the static loader contract and the runtime `MAX_SPAWN_DEPTH = 3` guard.
 
 ### Toolkit-specific specialists
 

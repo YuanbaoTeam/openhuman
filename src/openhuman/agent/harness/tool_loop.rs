@@ -17,6 +17,9 @@ use super::credentials::scrub_credentials;
 use super::parse::{build_native_assistant_history, parse_structured_tool_calls, parse_tool_calls};
 use super::payload_summarizer::PayloadSummarizer;
 use crate::openhuman::context::guard::{ContextCheckResult, ContextGuard};
+use crate::openhuman::inference::model_context::context_window_for_model;
+
+use super::token_budget::trim_chat_messages_to_budget;
 
 /// Minimum characters per chunk when relaying LLM text to a streaming draft.
 const STREAM_CHUNK_MIN_CHARS: usize = 80;
@@ -130,12 +133,20 @@ pub(crate) async fn run_tool_call_loop(
         }
     };
 
-    let tool_specs: Vec<crate::openhuman::tools::ToolSpec> = tools_registry
+    // Filter to visible tools, then dedup by name before sending to the
+    // provider. Registry tools may collide with per-turn synthesised
+    // extra_tools (e.g. an `ArchetypeDelegationTool` whose
+    // `delegate_name = "research"` shadowing a same-named skill). Some
+    // providers (Anthropic, OpenHuman cloud after the uniqueness-enforcement
+    // rollout) 400 on duplicate tool names — see TAURI-RUST-4.
+    let filtered_specs: Vec<crate::openhuman::tools::ToolSpec> = tools_registry
         .iter()
         .chain(extra_tools.iter())
         .filter(|tool| is_visible(tool.name()))
         .map(|tool| tool.spec())
         .collect();
+    let tool_specs =
+        crate::openhuman::agent::harness::session::dedup_visible_tool_specs(filtered_specs);
     let use_native_tools = provider.supports_native_tools() && !tool_specs.is_empty();
 
     log::debug!(
@@ -153,7 +164,9 @@ pub(crate) async fn run_tool_call_loop(
             .join(", ")
     );
 
-    let mut context_guard = ContextGuard::new();
+    let mut context_guard = context_window_for_model(model)
+        .map(ContextGuard::with_context_window)
+        .unwrap_or_else(ContextGuard::new);
     let mut turn_cost = TurnCost::new();
 
     // Announce turn start to progress subscribers (if any). We use
@@ -233,6 +246,28 @@ pub(crate) async fn run_tool_call_loop(
                     ],
                 );
                 anyhow::bail!(msg);
+            }
+        }
+
+        if let Some(context_window) = context_window_for_model(model) {
+            let budget_outcome = trim_chat_messages_to_budget(history, context_window);
+            if budget_outcome.trimmed {
+                log::warn!(
+                    "[agent_loop] pre-dispatch history trimmed model={} context_window={} original_tokens={} final_tokens={} messages_removed={}",
+                    model,
+                    context_window,
+                    budget_outcome.original_tokens,
+                    budget_outcome.final_tokens,
+                    budget_outcome.messages_removed
+                );
+            } else {
+                tracing::debug!(
+                    iteration,
+                    model,
+                    context_window,
+                    estimated_tokens = budget_outcome.final_tokens,
+                    "[agent_loop] pre-dispatch token budget ok"
+                );
             }
         }
 
@@ -645,6 +680,63 @@ pub(crate) async fn run_tool_call_loop(
                 }
             }
 
+            // ── External-effect approval gate (#1339, #2135) ──
+            // Tools whose `external_effect()` returns true route
+            // through the process-global `ApprovalGate` so the UI
+            // can prompt the user before `execute()` runs. The gate
+            // is `None` when supervised mode is disabled or in test
+            // envs — behavior matches the pre-#1339 path.
+            //
+            // `approval_request_id` carries the persisted row id
+            // forward so we can stamp the terminal execution
+            // outcome onto the same `pending_approvals` row after
+            // the tool finishes (issue #2135). `None` means the
+            // tool was either not gated (no supervised gate, not
+            // external-effect), was session-allowlist-shortcutted,
+            // or was denied — none of which produce an audit row
+            // that needs an "after" entry.
+            let mut approval_request_id: Option<String> = None;
+            let mut approval_gate_for_audit: Option<
+                std::sync::Arc<crate::openhuman::approval::ApprovalGate>,
+            > = None;
+            if let Some(tool) = tool_opt {
+                if tool.external_effect_with_args(&call.arguments) {
+                    if let Some(gate) = crate::openhuman::approval::ApprovalGate::try_global() {
+                        let summary = crate::openhuman::approval::summarize_action(
+                            &call.name,
+                            &call.arguments,
+                        );
+                        let redacted = crate::openhuman::approval::redact_args(&call.arguments);
+                        let (outcome, request_id) =
+                            gate.intercept_audited(&call.name, &summary, redacted).await;
+                        match outcome {
+                            crate::openhuman::approval::GateOutcome::Allow => {
+                                approval_request_id = request_id;
+                                if approval_request_id.is_some() {
+                                    approval_gate_for_audit = Some(gate);
+                                }
+                            }
+                            crate::openhuman::approval::GateOutcome::Deny { reason } => {
+                                tracing::warn!(
+                                    iteration,
+                                    tool = call.name.as_str(),
+                                    reason = %reason,
+                                    "[agent_loop] approval gate denied tool call"
+                                );
+                                emit_failed_completion(&reason).await;
+                                individual_results.push(reason.clone());
+                                let _ = writeln!(
+                                    tool_results,
+                                    "<tool_result name=\"{}\">\n{reason}\n</tool_result>",
+                                    call.name
+                                );
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+
             let result = if let Some(tool) = tool_opt {
                 let tool_deadline =
                     crate::openhuman::tool_timeout::tool_execution_timeout_duration();
@@ -817,6 +909,29 @@ pub(crate) async fn run_tool_call_loop(
                     {
                         log::warn!("[agent_loop] progress sink closed while emitting ToolCallCompleted: {e}");
                     }
+                }
+                // ── Approval audit after-action row (#2135) ────
+                // Stamp the terminal status onto the same
+                // `pending_approvals` row the gate created before
+                // execution, so the audit trail carries both the
+                // before (approval) and after (executed_at +
+                // outcome). Best-effort: a write failure here is
+                // logged but not propagated to the agent.
+                if let (Some(gate), Some(req_id)) = (
+                    approval_gate_for_audit.as_ref(),
+                    approval_request_id.as_ref(),
+                ) {
+                    let exec_outcome = if success {
+                        crate::openhuman::approval::ExecutionOutcome::Success
+                    } else {
+                        crate::openhuman::approval::ExecutionOutcome::Failure
+                    };
+                    let err_text = if success {
+                        None
+                    } else {
+                        Some(result_text.as_str())
+                    };
+                    gate.record_execution(req_id, exec_outcome, err_text);
                 }
                 result_text
             } else {

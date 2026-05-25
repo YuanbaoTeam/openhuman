@@ -11,6 +11,9 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import chatRuntimeReducer, { setToolTimelineForThread } from '../../store/chatRuntimeSlice';
+import mascotReducer, { setCustomMascotGifUrl } from '../../store/mascotSlice';
+import threadReducer, { setSelectedThread } from '../../store/threadSlice';
 // ── Static import (after mocks are hoisted) ──────────────────────────────
 import HumanPage from './HumanPage';
 
@@ -20,22 +23,27 @@ vi.mock('../../pages/Conversations', () => ({
   default: () => <div data-testid="conversations-stub" />,
 }));
 
-vi.mock('./Mascot', () => ({ YellowMascot: () => <div data-testid="mascot-stub" /> }));
+vi.mock('./Mascot', () => ({
+  YellowMascot: () => <div data-testid="mascot-stub" />,
+  CustomGifMascot: ({ src, face }: { src: string; face?: string }) => (
+    <img data-testid="custom-gif-mascot" data-face={face} src={src} alt="" />
+  ),
+  Ghosty: ({ face, bodyColor }: { face?: string; bodyColor?: string }) => (
+    <div data-testid="ghosty-submascot" data-face={face} data-body-color={bodyColor} />
+  ),
+}));
 
 vi.mock('./useHumanMascot', () => ({ useHumanMascot: () => ({ face: 'idle', visemes: [] }) }));
-
-vi.mock('../../store/hooks', () => ({ useAppSelector: () => 'yellow' }));
-
-vi.mock('../../store/mascotSlice', () => ({ selectMascotColor: () => 'yellow' }));
 
 const SPEAK_REPLIES_KEY = 'human.speakReplies';
 
 function buildMinimalStore() {
-  return configureStore({ reducer: { _noop: (_s: null = null) => _s } });
+  return configureStore({
+    reducer: { mascot: mascotReducer, thread: threadReducer, chatRuntime: chatRuntimeReducer },
+  });
 }
 
-function renderHumanPage() {
-  const store = buildMinimalStore();
+function renderHumanPage(store = buildMinimalStore()) {
   return render(
     <Provider store={store}>
       <HumanPage />
@@ -95,5 +103,56 @@ describe('HumanPage — speak-replies localStorage persistence', () => {
 
     expect(localStorage.getItem(SPEAK_REPLIES_KEY)).toBe('1');
     expect(checkbox).toBeChecked();
+  });
+
+  it('renders sub-mascots for the selected thread subagent timeline', () => {
+    const store = buildMinimalStore();
+    store.dispatch(setSelectedThread('thread-subagents'));
+    store.dispatch(
+      setToolTimelineForThread({
+        threadId: 'thread-subagents',
+        entries: [
+          {
+            id: 'thread-subagents:subagent:sub-1:researcher',
+            name: 'subagent:researcher',
+            round: 1,
+            status: 'running',
+            detail: 'Research the latest docs and report back.',
+            subagent: {
+              taskId: 'sub-1',
+              agentId: 'researcher',
+              childIteration: 1,
+              childMaxIterations: 3,
+              toolCalls: [],
+            },
+          },
+        ],
+      })
+    );
+
+    renderHumanPage(store);
+
+    expect(screen.getByTestId('sub-mascot-layer')).toBeInTheDocument();
+    expect(
+      screen.getByRole('status', { name: /researcher subagent running/i })
+    ).toBeInTheDocument();
+    // The bubble renders only the label; activity moved to the title tooltip.
+    expect(screen.getByText('Researcher')).toBeInTheDocument();
+    // Activity is in the title attribute of the bubble, not visible body text.
+    const bubble = screen.getByTestId('sub-mascot-bubble');
+    expect(bubble).toHaveAttribute('title', expect.stringContaining('Iteration 1/3'));
+  });
+
+  it('renders a custom GIF mascot when one is configured', () => {
+    const store = buildMinimalStore();
+    store.dispatch(setCustomMascotGifUrl('https://example.com/avatar.gif'));
+
+    renderHumanPage(store);
+
+    expect(screen.getByTestId('custom-gif-mascot')).toHaveAttribute(
+      'src',
+      'https://example.com/avatar.gif'
+    );
+    expect(screen.queryByTestId('mascot-stub')).not.toBeInTheDocument();
   });
 });

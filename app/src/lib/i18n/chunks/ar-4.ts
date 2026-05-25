@@ -46,6 +46,15 @@ const ar4: TranslationMap = {
   'composio.connect.subdomainInvalid':
     'أدخل النطاق الفرعي القصير فقط (مثل "acme")، وليس الرابط الكامل. يجب أن يحتوي فقط على أحرف وأرقام وشُرَط.',
   'composio.connect.subdomainRequired': 'يرجى إدخال نطاقك الفرعي في Atlassian للمتابعة.',
+  'composio.connect.dynamicsOrgNameLabel': 'اسم مؤسسة Dynamics 365',
+  'composio.connect.dynamicsOrgNameHint':
+    'على سبيل المثال، "myorg" لـ myorg.crm.dynamics.com. أدخل اسم المؤسسة المختصر فقط، وليس الرابط الكامل.',
+  'composio.connect.needsFieldsPrefix': 'للاتصال',
+  'composio.connect.needsFieldsSuffix':
+    'نحتاج إلى مزيد من المعلومات. املأ الحقول الناقصة أدناه وحاول مرة أخرى.',
+  'composio.connect.requiredFieldEmpty': 'هذا الحقل مطلوب.',
+  'composio.connect.wabaIdHint':
+    'احصل عليه عبر GET /me/businesses ثم GET /{business_id}/owned_whatsapp_business_accounts باستخدام رمز وصول Meta الخاص بك.',
   'composio.connect.wabaIdLabel': 'تسمية معرف WABA',
   'composio.connect.wabaIdRequired': 'يرجى إدخال معرف حساب WhatsApp Business (WABA ID) للمتابعة.',
   'composio.connect.waitingFor': 'بانتظار',
@@ -143,11 +152,24 @@ const ar4: TranslationMap = {
   'onboarding.contextGathering.continueToChat': 'المتابعة إلى المحادثة',
   'onboarding.contextGathering.errorDesc':
     'تعذّر إنشاء ملفك الكامل الآن، لكن لا بأس — يمكنك المتابعة وسيُبنى ملفك مع الوقت.',
+  'onboarding.contextGathering.coreAlive': 'النواة متاحة — قد يستغرق التشغيل الأول دقيقة.',
+  'onboarding.contextGathering.coreAliveProbing': 'يجري التحقق من اتصال النواة…',
+  'onboarding.contextGathering.coreUnreachable':
+    'النواة لا تستجيب. يمكنك المتابعة والمحاولة لاحقًا.',
+  'onboarding.contextGathering.stillWorkingDesc':
+    'قد يستغرق التشغيل الأول 30–60 ثانية أثناء تهيئة نموذجك المحلي والأدوات. يمكنك المتابعة إلى المحادثة في أي وقت — يستمر بناء الملف الشخصي في الخلفية.',
+  'onboarding.contextGathering.stillWorkingTitle': 'لا يزال العمل جاريًا على ملفك الشخصي…',
   'onboarding.contextGathering.title': 'جمع السياق',
   'openhuman.team_list_teams': 'قائمة الفرق',
   'overlay.ariaAttention': 'رسالة انتباه',
+  'overlay.ariaCompanion': 'الرفيق نشط',
   'overlay.ariaOrb': 'تراكب OpenHuman',
   'overlay.ariaVoiceActive': 'إدخال الصوت نشط',
+  'overlay.companion.error': 'خطأ',
+  'overlay.companion.listening': 'يستمع…',
+  'overlay.companion.pointing': 'يشير…',
+  'overlay.companion.speaking': 'يتحدث…',
+  'overlay.companion.thinking': 'يفكر…',
   'overlay.orbTitle': 'اسحب للتحريك · انقر مرتين لإعادة الضبط',
   'pages.settings.account.connections': 'الاتصالات',
   'pages.settings.account.connectionsDesc': 'وصف الاتصالات',
@@ -164,8 +186,13 @@ const ar4: TranslationMap = {
   'pages.settings.ai.llmDesc': 'وصف LLM',
   'pages.settings.ai.voice': 'الصوت',
   'pages.settings.ai.voiceDesc': 'وصف الصوت',
+  'pages.settings.ai.embeddings': 'التضمينات',
+  'pages.settings.ai.embeddingsDesc': 'نموذج ترميز المتجهات لاسترجاع الذاكرة',
   'pages.settings.aiSection.description': 'مزودو نماذج اللغة وOllama المحلي والصوت (STT / TTS).',
   'pages.settings.aiSection.title': 'الذكاء الاصطناعي',
+  'pages.settings.features.desktopCompanion': 'الرفيق المكتبي',
+  'pages.settings.features.desktopCompanionDesc':
+    'مساعد صوتي يدرك الشاشة — يستمع ويرى ويتحدث ويشير',
   'pages.settings.features.messagingChannels': 'قنوات المراسلة',
   'pages.settings.features.messagingChannelsDesc': 'وصف قنوات المراسلة',
   'pages.settings.features.notifications': 'الإشعارات',
@@ -270,6 +297,18 @@ const ar4: TranslationMap = {
   'settings.ai.localOllama': 'محلي (Ollama)',
   'settings.ai.modelLabel': 'النموذج',
   'settings.ai.noCustomProviders': 'لا يوجد مزودون مخصصون',
+  'settings.ai.openAiCompat.authHeaderExample': 'Authorization: Bearer <your key>',
+  'settings.ai.openAiCompat.authHeaderLabel': 'Auth header',
+  'settings.ai.openAiCompat.baseUrlLabel': 'Base URL',
+  'settings.ai.openAiCompat.baseUrlUnavailable': 'Unavailable',
+  'settings.ai.openAiCompat.clearKey': 'Clear key',
+  'settings.ai.openAiCompat.description':
+    "Point local harnesses at this /v1 server to route through the providers configured below. Authentication uses a stable key you set here, not the app's internal core bearer.",
+  'settings.ai.openAiCompat.keyConfigured': 'Key configured',
+  'settings.ai.openAiCompat.keyRequired': 'Key required',
+  'settings.ai.openAiCompat.rotateKey': 'Rotate key',
+  'settings.ai.openAiCompat.setKey': 'Set key',
+  'settings.ai.openAiCompat.title': 'OpenAI-compatible endpoint',
   'settings.ai.providerLabel': 'المزود',
   'settings.ai.routing': 'التوجيه',
   'settings.ai.routingCustom': 'توجيه مخصص',
@@ -361,6 +400,20 @@ const ar4: TranslationMap = {
   'settings.billing.subscription.paymentConfirmed': 'تم تأكيد الدفع',
   'settings.billing.subscription.perMonth': 'في الشهر',
   'settings.billing.subscription.popular': 'شائع',
+  'pages.settings.account.migration': 'استيراد من مساعد آخر',
+  'pages.settings.account.migrationDesc':
+    'انقل الذاكرة والملاحظات من OpenClaw (وقريبًا Hermes) إلى مساحة العمل هذه.',
+  'composio.connect.scope.read': 'Read',
+  'composio.connect.scope.readHint': 'Allow the agent to read data from this connection.',
+  'composio.connect.scope.write': 'Write',
+  'composio.connect.scope.writeHint':
+    'Allow the agent to create or modify data through this connection.',
+  'composio.connect.scope.admin': 'Admin',
+  'composio.connect.scope.adminHint':
+    'Allow the agent to manage settings, permissions, or destructive actions.',
+  'pages.settings.composioSection.title': 'Composio',
+  'pages.settings.composioSection.description':
+    'Routing, triggers, and history for integrations powered by Composio.',
 };
 
 export default ar4;

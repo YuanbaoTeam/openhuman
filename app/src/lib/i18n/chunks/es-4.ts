@@ -46,6 +46,15 @@ const es4: TranslationMap = {
   'composio.connect.subdomainInvalid':
     'Introduce solo el subdominio corto (p. ej. "acme"), no la URL completa. Debe contener solo letras, números y guiones.',
   'composio.connect.subdomainRequired': 'Ingresa tu subdominio de Atlassian para continuar.',
+  'composio.connect.dynamicsOrgNameLabel': 'Nombre de la organización de Dynamics 365',
+  'composio.connect.dynamicsOrgNameHint':
+    'Por ejemplo, "myorg" para myorg.crm.dynamics.com. Introduce solo el nombre corto de la organización, no la URL completa.',
+  'composio.connect.needsFieldsPrefix': 'Para conectar',
+  'composio.connect.needsFieldsSuffix':
+    'necesitamos un poco más de información. Completa los campos que faltan abajo y vuelve a intentarlo.',
+  'composio.connect.requiredFieldEmpty': 'Este campo es obligatorio.',
+  'composio.connect.wabaIdHint':
+    'Encuéntralo mediante GET /me/businesses y luego GET /{business_id}/owned_whatsapp_business_accounts usando tu token de acceso de Meta.',
   'composio.connect.wabaIdLabel': 'Etiqueta de ID de WABA',
   'composio.connect.wabaIdRequired':
     'Ingresa tu ID de cuenta de WhatsApp Business (WABA ID) para continuar.',
@@ -144,11 +153,25 @@ const es4: TranslationMap = {
   'onboarding.contextGathering.continueToChat': 'Continuar al chat',
   'onboarding.contextGathering.errorDesc':
     'No pudimos construir tu perfil completo ahora mismo, pero no pasa nada — puedes continuar y tu perfil se construirá con el tiempo.',
+  'onboarding.contextGathering.coreAlive':
+    'El núcleo está disponible — el primer arranque puede tardar un minuto.',
+  'onboarding.contextGathering.coreAliveProbing': 'Comprobando la conexión con el núcleo…',
+  'onboarding.contextGathering.coreUnreachable':
+    'El núcleo no responde. Puedes continuar e intentarlo más tarde.',
+  'onboarding.contextGathering.stillWorkingDesc':
+    'El primer arranque puede tardar 30–60 segundos mientras preparamos tu modelo local y tus herramientas. Puedes continuar al chat en cualquier momento — la construcción del perfil sigue en segundo plano.',
+  'onboarding.contextGathering.stillWorkingTitle': 'Seguimos trabajando en tu perfil…',
   'onboarding.contextGathering.title': 'Recopilación de contexto',
   'openhuman.team_list_teams': 'Lista de equipos',
   'overlay.ariaAttention': 'Mensaje de atención',
+  'overlay.ariaCompanion': 'Acompañante activo',
   'overlay.ariaOrb': 'Overlay de OpenHuman',
   'overlay.ariaVoiceActive': 'Entrada de voz activa',
+  'overlay.companion.error': 'Error',
+  'overlay.companion.listening': 'Escuchando…',
+  'overlay.companion.pointing': 'Señalando…',
+  'overlay.companion.speaking': 'Hablando…',
+  'overlay.companion.thinking': 'Pensando…',
   'overlay.orbTitle': 'Arrastra para mover · Doble clic para restablecer posición',
   'pages.settings.account.connections': 'Conexiones',
   'pages.settings.account.connectionsDesc': 'Descripción de conexiones',
@@ -165,9 +188,15 @@ const es4: TranslationMap = {
   'pages.settings.ai.llmDesc': 'Descripción de LLM',
   'pages.settings.ai.voice': 'Voz',
   'pages.settings.ai.voiceDesc': 'Descripción de voz',
+  'pages.settings.ai.embeddings': 'Embeddings',
+  'pages.settings.ai.embeddingsDesc':
+    'Modelo de codificación vectorial para recuperación de memoria',
   'pages.settings.aiSection.description':
     'Proveedores de modelos de lenguaje, Ollama local y voz (STT / TTS).',
   'pages.settings.aiSection.title': 'IA',
+  'pages.settings.features.desktopCompanion': 'Acompañante de escritorio',
+  'pages.settings.features.desktopCompanionDesc':
+    'Asistente de voz con conciencia de pantalla — escucha, ve, habla, señala',
   'pages.settings.features.messagingChannels': 'Canales de mensajería',
   'pages.settings.features.messagingChannelsDesc': 'Descripción de canales de mensajería',
   'pages.settings.features.notifications': 'Notificaciones',
@@ -274,6 +303,18 @@ const es4: TranslationMap = {
   'settings.ai.localOllama': 'Local (Ollama)',
   'settings.ai.modelLabel': 'Modelo',
   'settings.ai.noCustomProviders': 'Sin proveedores personalizados',
+  'settings.ai.openAiCompat.authHeaderExample': 'Authorization: Bearer <your key>',
+  'settings.ai.openAiCompat.authHeaderLabel': 'Auth header',
+  'settings.ai.openAiCompat.baseUrlLabel': 'Base URL',
+  'settings.ai.openAiCompat.baseUrlUnavailable': 'Unavailable',
+  'settings.ai.openAiCompat.clearKey': 'Clear key',
+  'settings.ai.openAiCompat.description':
+    "Point local harnesses at this /v1 server to route through the providers configured below. Authentication uses a stable key you set here, not the app's internal core bearer.",
+  'settings.ai.openAiCompat.keyConfigured': 'Key configured',
+  'settings.ai.openAiCompat.keyRequired': 'Key required',
+  'settings.ai.openAiCompat.rotateKey': 'Rotate key',
+  'settings.ai.openAiCompat.setKey': 'Set key',
+  'settings.ai.openAiCompat.title': 'OpenAI-compatible endpoint',
   'settings.ai.providerLabel': 'Proveedor',
   'settings.ai.routing': 'Enrutamiento',
   'settings.ai.routingCustom': 'Enrutamiento personalizado',
@@ -365,6 +406,20 @@ const es4: TranslationMap = {
   'settings.billing.subscription.paymentConfirmed': 'Pago confirmado',
   'settings.billing.subscription.perMonth': 'Por mes',
   'settings.billing.subscription.popular': 'Popular',
+  'pages.settings.account.migration': 'Importar desde otro asistente',
+  'pages.settings.account.migrationDesc':
+    'Migra memoria y notas desde OpenClaw (y pronto Hermes) a este espacio de trabajo.',
+  'composio.connect.scope.read': 'Read',
+  'composio.connect.scope.readHint': 'Allow the agent to read data from this connection.',
+  'composio.connect.scope.write': 'Write',
+  'composio.connect.scope.writeHint':
+    'Allow the agent to create or modify data through this connection.',
+  'composio.connect.scope.admin': 'Admin',
+  'composio.connect.scope.adminHint':
+    'Allow the agent to manage settings, permissions, or destructive actions.',
+  'pages.settings.composioSection.title': 'Composio',
+  'pages.settings.composioSection.description':
+    'Routing, triggers, and history for integrations powered by Composio.',
 };
 
 export default es4;

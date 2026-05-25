@@ -24,7 +24,13 @@ export interface ModelRoute {
 export type AuthStyle = 'bearer' | 'anthropic' | 'openhuman_jwt' | 'none';
 
 /** @deprecated Use AuthStyle. Kept for back-compat with old wire format. */
-export type CloudProviderType = 'openhuman' | 'openai' | 'anthropic' | 'openrouter' | 'custom';
+export type CloudProviderType =
+  | 'openhuman'
+  | 'openai'
+  | 'anthropic'
+  | 'openrouter'
+  | 'orcarouter'
+  | 'custom';
 
 /**
  * Endpoint config for one cloud LLM provider (new slug-keyed shape).
@@ -346,6 +352,80 @@ export async function openhumanGetMeetSettings(): Promise<
   }
   return await callCoreRpc<CommandResponse<{ auto_orchestrator_handoff: boolean }>>({
     method: 'openhuman.config_get_meet_settings',
+  });
+}
+
+/**
+ * Update the agent autonomy policy settings (currently just the per-hour tool
+ * action ceiling). Persists to the user's `config.toml`. Takes effect on the
+ * next agent session — running sessions / cron jobs / channel listeners keep
+ * the limit they were started with until core restart.
+ */
+export async function openhumanUpdateAutonomySettings(update: {
+  max_actions_per_hour?: number;
+}): Promise<CommandResponse<ConfigSnapshot>> {
+  if (!isTauri()) {
+    throw new Error('Not running in Tauri');
+  }
+  return await callCoreRpc<CommandResponse<ConfigSnapshot>>({
+    method: CORE_RPC_METHODS.configUpdateAutonomySettings,
+    params: update,
+  });
+}
+
+/**
+ * Read the current agent autonomy policy settings from the loaded config.
+ */
+export async function openhumanGetAutonomySettings(): Promise<
+  CommandResponse<{ max_actions_per_hour: number }>
+> {
+  if (!isTauri()) {
+    throw new Error('Not running in Tauri');
+  }
+  return await callCoreRpc<CommandResponse<{ max_actions_per_hour: number }>>({
+    method: CORE_RPC_METHODS.configGetAutonomySettings,
+  });
+}
+
+export type SearchEngineId = 'managed' | 'parallel' | 'brave';
+
+export interface SearchSettingsUpdate {
+  engine?: SearchEngineId;
+  max_results?: number;
+  timeout_secs?: number;
+  /** Empty string clears the stored key. */
+  parallel_api_key?: string;
+  /** Empty string clears the stored key. */
+  brave_api_key?: string;
+}
+
+export interface SearchSettings {
+  engine: SearchEngineId | string;
+  effective_engine: SearchEngineId;
+  max_results: number;
+  timeout_secs: number;
+  parallel_configured: boolean;
+  brave_configured: boolean;
+}
+
+export async function openhumanGetSearchSettings(): Promise<CommandResponse<SearchSettings>> {
+  if (!isTauri()) {
+    throw new Error('Not running in Tauri');
+  }
+  return await callCoreRpc<CommandResponse<SearchSettings>>({
+    method: CORE_RPC_METHODS.configGetSearchSettings,
+  });
+}
+
+export async function openhumanUpdateSearchSettings(
+  update: SearchSettingsUpdate
+): Promise<CommandResponse<ConfigSnapshot>> {
+  if (!isTauri()) {
+    throw new Error('Not running in Tauri');
+  }
+  return await callCoreRpc<CommandResponse<ConfigSnapshot>>({
+    method: CORE_RPC_METHODS.configUpdateSearchSettings,
+    params: update,
   });
 }
 

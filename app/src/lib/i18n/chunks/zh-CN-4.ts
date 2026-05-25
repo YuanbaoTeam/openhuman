@@ -46,6 +46,14 @@ const zhCN4: TranslationMap = {
   'composio.connect.subdomainInvalid':
     '仅输入短子域名（例如 "acme"），而非完整 URL。只能包含字母、数字和连字符。',
   'composio.connect.subdomainRequired': '请输入你的 Atlassian 子域名以继续。',
+  'composio.connect.dynamicsOrgNameLabel': 'Dynamics 365 组织名称',
+  'composio.connect.dynamicsOrgNameHint':
+    '例如，myorg.crm.dynamics.com 的组织名称为 "myorg"。仅输入简短的组织名称，而不是完整 URL。',
+  'composio.connect.needsFieldsPrefix': '若要连接',
+  'composio.connect.needsFieldsSuffix': '我们需要一些额外信息。请填写下面缺失的字段并重试。',
+  'composio.connect.requiredFieldEmpty': '此字段为必填项。',
+  'composio.connect.wabaIdHint':
+    '通过 Meta 访问令牌调用 GET /me/businesses，然后 GET /{business_id}/owned_whatsapp_business_accounts 获取。',
   'composio.connect.wabaIdLabel': 'WhatsApp 企业账户 ID',
   'composio.connect.wabaIdRequired': '请输入你的 WhatsApp 企业账户 ID（WABA ID）以继续。',
   'composio.connect.waitingFor': '等待中',
@@ -142,11 +150,23 @@ const zhCN4: TranslationMap = {
   'onboarding.contextGathering.continueToChat': '前往对话',
   'onboarding.contextGathering.errorDesc':
     '我们暂时无法构建你的完整资料，但没关系——你可以继续，资料会随时间逐步完善。',
+  'onboarding.contextGathering.coreAlive': '核心可访问 — 首次启动可能需要一分钟。',
+  'onboarding.contextGathering.coreAliveProbing': '正在检查核心连接…',
+  'onboarding.contextGathering.coreUnreachable': '核心未响应。你可以继续，稍后再试。',
+  'onboarding.contextGathering.stillWorkingDesc':
+    '我们正在预热本地模型与工具，首次启动可能需要 30–60 秒。你可以随时进入对话 — 档案构建会在后台继续进行。',
+  'onboarding.contextGathering.stillWorkingTitle': '仍在生成你的档案…',
   'onboarding.contextGathering.title': '上下文收集',
   'openhuman.team_list_teams': '团队列表',
   'overlay.ariaAttention': '注意消息',
+  'overlay.ariaCompanion': '伴侣已激活',
   'overlay.ariaOrb': 'OpenHuman 浮层',
   'overlay.ariaVoiceActive': '语音输入已激活',
+  'overlay.companion.error': '错误',
+  'overlay.companion.listening': '正在聆听…',
+  'overlay.companion.pointing': '正在指向…',
+  'overlay.companion.speaking': '正在说话…',
+  'overlay.companion.thinking': '正在思考…',
   'overlay.orbTitle': '拖动以移动 · 双击重置位置',
   'pages.settings.account.connections': '连接',
   'pages.settings.account.connectionsDesc': '管理已连接的账户和服务',
@@ -162,8 +182,13 @@ const zhCN4: TranslationMap = {
   'pages.settings.ai.llmDesc': '选择并配置语言模型提供商',
   'pages.settings.ai.voice': '语音',
   'pages.settings.ai.voiceDesc': '配置语音输入和输出',
+  'pages.settings.ai.embeddings': '向量嵌入',
+  'pages.settings.ai.embeddingsDesc': '用于记忆检索的向量编码模型',
   'pages.settings.aiSection.description': '语言模型提供商、本地 Ollama 以及语音（STT / TTS）。',
   'pages.settings.aiSection.title': 'AI',
+  'pages.settings.features.desktopCompanion': '桌面伴侣',
+  'pages.settings.features.desktopCompanionDesc':
+    '具有屏幕感知能力的语音助手 — 倾听、观看、说话、指向',
   'pages.settings.features.messagingChannels': '消息渠道',
   'pages.settings.features.messagingChannelsDesc': '配置消息渠道和集成',
   'pages.settings.features.notifications': '通知',
@@ -268,6 +293,18 @@ const zhCN4: TranslationMap = {
   'settings.ai.localOllama': '本地（Ollama）',
   'settings.ai.modelLabel': '模型',
   'settings.ai.noCustomProviders': '未配置自定义提供商',
+  'settings.ai.openAiCompat.authHeaderExample': 'Authorization: Bearer <your key>',
+  'settings.ai.openAiCompat.authHeaderLabel': 'Auth header',
+  'settings.ai.openAiCompat.baseUrlLabel': 'Base URL',
+  'settings.ai.openAiCompat.baseUrlUnavailable': 'Unavailable',
+  'settings.ai.openAiCompat.clearKey': 'Clear key',
+  'settings.ai.openAiCompat.description':
+    "Point local harnesses at this /v1 server to route through the providers configured below. Authentication uses a stable key you set here, not the app's internal core bearer.",
+  'settings.ai.openAiCompat.keyConfigured': 'Key configured',
+  'settings.ai.openAiCompat.keyRequired': 'Key required',
+  'settings.ai.openAiCompat.rotateKey': 'Rotate key',
+  'settings.ai.openAiCompat.setKey': 'Set key',
+  'settings.ai.openAiCompat.title': 'OpenAI-compatible endpoint',
   'settings.ai.providerLabel': '提供商',
   'settings.ai.routing': '路由',
   'settings.ai.routingCustom': '自定义路由',
@@ -359,6 +396,20 @@ const zhCN4: TranslationMap = {
   'settings.billing.subscription.paymentConfirmed': '支付已确认',
   'settings.billing.subscription.perMonth': '每月',
   'settings.billing.subscription.popular': '热门',
+  'pages.settings.account.migration': '从其他助手导入',
+  'pages.settings.account.migrationDesc':
+    '将 OpenClaw（即将支持 Hermes）的记忆和笔记迁移到此工作区。',
+  'composio.connect.scope.read': 'Read',
+  'composio.connect.scope.readHint': 'Allow the agent to read data from this connection.',
+  'composio.connect.scope.write': 'Write',
+  'composio.connect.scope.writeHint':
+    'Allow the agent to create or modify data through this connection.',
+  'composio.connect.scope.admin': 'Admin',
+  'composio.connect.scope.adminHint':
+    'Allow the agent to manage settings, permissions, or destructive actions.',
+  'pages.settings.composioSection.title': 'Composio',
+  'pages.settings.composioSection.description':
+    'Routing, triggers, and history for integrations powered by Composio.',
 };
 
 export default zhCN4;

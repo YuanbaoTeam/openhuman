@@ -1,4 +1,8 @@
 use super::*;
+use sentry::test::TestTransport;
+use std::sync::Arc;
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn make_provider(name: &str, url: &str, key: Option<&str>) -> OpenAiCompatibleProvider {
     OpenAiCompatibleProvider::new(name, url, key, AuthStyle::Bearer)
@@ -372,6 +376,69 @@ async fn chat_via_responses_requires_non_system_message() {
     assert!(err
         .to_string()
         .contains("requires at least one non-system message"));
+}
+
+#[tokio::test]
+async fn streaming_chat_config_rejection_propagates_error_without_sentry_report() {
+    // Representative guardrail for the new provider-config-rejection
+    // suppression branches in compatible.rs: streaming_chat should still
+    // return an error, but it must not call report_error/Sentry for this
+    // deterministic user-config state.
+    let mock_server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/chat/completions"))
+        .respond_with(
+            ResponseTemplate::new(400)
+                .set_body_string("invalid temperature: only 1 is allowed for this model"),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let transport = TestTransport::new();
+    let sentry_options = sentry::ClientOptions {
+        dsn: Some("https://public@sentry.invalid/1".parse().unwrap()),
+        transport: Some(Arc::new(transport.clone())),
+        ..Default::default()
+    };
+    let sentry_hub = Arc::new(sentry::Hub::new(
+        Some(Arc::new(sentry_options.into())),
+        Arc::new(Default::default()),
+    ));
+    let _sentry_guard = sentry::HubSwitchGuard::new(sentry_hub);
+
+    let provider =
+        OpenAiCompatibleProvider::new("custom_openai", &mock_server.uri(), None, AuthStyle::None);
+    let request = NativeChatRequest {
+        model: "kimi-k2".to_string(),
+        messages: vec![NativeMessage {
+            role: "user".to_string(),
+            content: Some("hello".to_string()),
+            tool_call_id: None,
+            tool_calls: None,
+        }],
+        temperature: Some(0.7),
+        stream: Some(true),
+        tools: None,
+        tool_choice: None,
+        thread_id: None,
+        stream_options: Some(super::compatible_types::OpenAiStreamOptions {
+            include_usage: true,
+        }),
+    };
+    let (delta_tx, _delta_rx) = tokio::sync::mpsc::channel(8);
+
+    let err = provider
+        .stream_native_chat(None, &request, &delta_tx, 0)
+        .await
+        .expect_err("400 provider config-rejection must still propagate as Err");
+    assert!(
+        err.to_string().contains("streaming API error"),
+        "err: {err}"
+    );
+    assert!(
+        transport.fetch_and_clear_events().is_empty(),
+        "provider config-rejection must not be reported to Sentry"
+    );
 }
 
 // ----------------------------------------------------------
@@ -1200,5 +1267,65 @@ fn parse_provider_tool_call_from_value_guards_malformed_arguments() {
     assert_eq!(
         call.arguments, "{}",
         "malformed arguments string must be normalised to {{}} via the first-path guard"
+    );
+}
+
+#[test]
+fn custom_openai_provider_has_no_responses_fallback() {
+    let p = OpenAiCompatibleProvider::new_no_responses_fallback(
+        "custom_openai",
+        "http://localhost:11434/v1",
+        Some("sk-test"),
+        AuthStyle::Bearer,
+    );
+    assert!(
+        !p.supports_responses_fallback,
+        "custom_openai must not attempt the /v1/responses fallback"
+    );
+}
+
+#[test]
+fn enrich_404_message_adds_hint_when_no_fallback() {
+    let p = OpenAiCompatibleProvider::new_no_responses_fallback(
+        "custom_openai",
+        "http://localhost:11434/v1",
+        Some("sk-test"),
+        AuthStyle::Bearer,
+    );
+    let base = "custom_openai API error (404 Not Found): model not found".to_string();
+    let result = p.enrich_404_message(base.clone(), reqwest::StatusCode::NOT_FOUND);
+    assert!(
+        result.starts_with(&base),
+        "must preserve original error prefix: {result}"
+    );
+    assert!(
+        result.contains("check that your endpoint URL is correct"),
+        "must contain user-actionable hint: {result}"
+    );
+
+    // Non-404 status should NOT add the hint
+    let result_200 = p.enrich_404_message(
+        "custom_openai API error (503 Service Unavailable): overloaded".to_string(),
+        reqwest::StatusCode::SERVICE_UNAVAILABLE,
+    );
+    assert!(
+        !result_200.contains("check that your endpoint URL"),
+        "must not add hint for non-404: {result_200}"
+    );
+
+    // Provider with fallback enabled should NOT add the hint even on 404
+    let p2 = OpenAiCompatibleProvider::new(
+        "openai",
+        "https://api.openai.com/v1",
+        Some("sk-real"),
+        AuthStyle::Bearer,
+    );
+    let result_with_fallback = p2.enrich_404_message(
+        "openai API error (404 Not Found): model not found".to_string(),
+        reqwest::StatusCode::NOT_FOUND,
+    );
+    assert_eq!(
+        result_with_fallback, "openai API error (404 Not Found): model not found",
+        "must not add hint when fallback is enabled: {result_with_fallback}"
     );
 }

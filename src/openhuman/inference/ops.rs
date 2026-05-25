@@ -3,7 +3,7 @@
 use crate::openhuman::config::rpc as config_rpc;
 use crate::openhuman::config::Config;
 use crate::openhuman::inference::local as local_runtime;
-use crate::openhuman::inference::local::ops::{LocalAiChatMessage, ReactionDecision};
+use crate::openhuman::inference::local::ops::ReactionDecision;
 use crate::openhuman::inference::provider as providers;
 use crate::openhuman::inference::{device, presets, sentiment, SentimentResult};
 use crate::openhuman::inference::{LocalAiEmbeddingResult, LocalAiStatus};
@@ -12,6 +12,11 @@ use serde_json::{json, Value};
 use tracing::{debug, error};
 
 const LOG_PREFIX: &str = "[inference::ops]";
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct InferenceTestProviderModelResult {
+    pub reply: String,
+}
 
 pub async fn inference_status(config: &Config) -> Result<RpcOutcome<LocalAiStatus>, String> {
     debug!("{LOG_PREFIX} status:start");
@@ -105,20 +110,60 @@ pub async fn inference_embed(
     result
 }
 
-pub async fn inference_chat(
+pub async fn inference_test_provider_model(
     config: &Config,
-    messages: Vec<LocalAiChatMessage>,
-    max_tokens: Option<u32>,
-) -> Result<RpcOutcome<String>, String> {
+    workload: &str,
+    provider: &str,
+    prompt: &str,
+) -> Result<RpcOutcome<InferenceTestProviderModelResult>, String> {
     debug!(
-        message_count = messages.len(),
-        ?max_tokens,
-        "{LOG_PREFIX} chat:start"
+        workload,
+        provider,
+        prompt_len = prompt.len(),
+        "{LOG_PREFIX} test_provider_model:start"
     );
-    let result = local_runtime::rpc::local_ai_chat(config, messages, max_tokens).await;
+    let result =
+        if provider.trim().starts_with("lmstudio:") || provider.trim().starts_with("ollama:") {
+            log::debug!("{LOG_PREFIX} test_provider_model: routing to local provider={provider}");
+            let (chat_provider, model) =
+            crate::openhuman::inference::provider::factory::create_local_chat_provider_from_string(
+                provider, config,
+            )
+            .map_err(|e| e.to_string())?;
+            log::debug!("{LOG_PREFIX} test_provider_model: invoking local model={model}");
+            chat_provider
+                .simple_chat(prompt, &model, config.default_temperature)
+                .await
+                .map_err(|e| e.to_string())
+                .map(|reply| {
+                    RpcOutcome::single_log(
+                        InferenceTestProviderModelResult { reply },
+                        "provider model test completed",
+                    )
+                })
+        } else {
+            let (chat_provider, model) =
+                crate::openhuman::inference::provider::factory::create_chat_provider_from_string(
+                    workload, provider, config,
+                )
+                .map_err(|e| e.to_string())?;
+            chat_provider
+                .simple_chat(prompt, &model, config.default_temperature)
+                .await
+                .map_err(|e| e.to_string())
+                .map(|reply| {
+                    RpcOutcome::single_log(
+                        InferenceTestProviderModelResult { reply },
+                        "provider model test completed",
+                    )
+                })
+        };
     match &result {
-        Ok(outcome) => debug!(output_len = outcome.value.len(), "{LOG_PREFIX} chat:ok"),
-        Err(err) => error!(error = %err, "{LOG_PREFIX} chat:error"),
+        Ok(outcome) => debug!(
+            output_len = outcome.value.reply.len(),
+            "{LOG_PREFIX} test_provider_model:ok"
+        ),
+        Err(err) => error!(error = %err, "{LOG_PREFIX} test_provider_model:error"),
     }
     result
 }
@@ -308,6 +353,79 @@ pub async fn inference_apply_preset(tier: &str) -> Result<RpcOutcome<Value>, Str
         }),
         "inference preset applied",
     ))
+}
+
+pub async fn inference_openai_oauth_start(config: &Config) -> Result<RpcOutcome<Value>, String> {
+    debug!("{LOG_PREFIX} openai_oauth_start:start");
+    let result =
+        crate::openhuman::inference::openai_oauth::start_openai_oauth(config).map(|start| {
+            RpcOutcome::single_log(
+                json!({
+                    "authUrl": start.auth_url,
+                    "state": start.state,
+                    "redirectUri": start.redirect_uri,
+                }),
+                "openai oauth authorize url ready",
+            )
+        });
+    match &result {
+        Ok(_) => debug!("{LOG_PREFIX} openai_oauth_start:ok"),
+        Err(err) => error!(error = %err, "{LOG_PREFIX} openai_oauth_start:error"),
+    }
+    result
+}
+
+pub async fn inference_openai_oauth_complete(
+    config: &Config,
+    callback_url: &str,
+) -> Result<RpcOutcome<Value>, String> {
+    debug!(
+        callback_len = callback_url.len(),
+        "{LOG_PREFIX} openai_oauth_complete:start"
+    );
+    let result =
+        crate::openhuman::inference::openai_oauth::complete_openai_oauth(config, callback_url)
+            .await
+            .map(|payload| RpcOutcome::single_log(payload, "openai oauth connected"));
+    match &result {
+        Ok(_) => debug!("{LOG_PREFIX} openai_oauth_complete:ok"),
+        Err(err) => error!(error = %err, "{LOG_PREFIX} openai_oauth_complete:error"),
+    }
+    result
+}
+
+pub async fn inference_openai_oauth_status(config: &Config) -> Result<RpcOutcome<Value>, String> {
+    debug!("{LOG_PREFIX} openai_oauth_status:start");
+    let result =
+        crate::openhuman::inference::openai_oauth::openai_oauth_status(config).map(|status| {
+            RpcOutcome::single_log(
+                json!({
+                    "connected": status.connected,
+                    "profileId": status.profile_id,
+                    "expiresAt": status.expires_at,
+                    "authMethod": status.auth_method,
+                }),
+                "openai oauth status",
+            )
+        });
+    match &result {
+        Ok(_) => debug!("{LOG_PREFIX} openai_oauth_status:ok"),
+        Err(err) => error!(error = %err, "{LOG_PREFIX} openai_oauth_status:error"),
+    }
+    result
+}
+
+pub async fn inference_openai_oauth_disconnect(
+    config: &Config,
+) -> Result<RpcOutcome<Value>, String> {
+    debug!("{LOG_PREFIX} openai_oauth_disconnect:start");
+    let result = crate::openhuman::inference::openai_oauth::disconnect_openai_oauth(config)
+        .map(|payload| RpcOutcome::single_log(payload, "openai oauth disconnected"));
+    match &result {
+        Ok(_) => debug!("{LOG_PREFIX} openai_oauth_disconnect:ok"),
+        Err(err) => error!(error = %err, "{LOG_PREFIX} openai_oauth_disconnect:error"),
+    }
+    result
 }
 
 pub async fn inference_diagnostics(config: &Config) -> Result<RpcOutcome<Value>, String> {

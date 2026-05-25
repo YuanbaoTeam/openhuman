@@ -72,6 +72,17 @@ pub enum DomainEvent {
     /// this variant is a hook for future ingestion subscribers to react to pull
     /// requests. See `src/openhuman/memory/ops.rs` for the RPC handlers.
     MemorySyncRequested { channel_id: Option<String> },
+    /// A high-level memory sync orchestration stage changed.
+    ///
+    /// Emitted by the `memory` domain so the frontend can surface progress
+    /// across request → fetch → store → queue → ingest → complete.
+    MemorySyncStageChanged {
+        trigger: String,
+        stage: String,
+        provider: Option<String>,
+        connection_id: Option<String>,
+        detail: Option<String>,
+    },
     /// A memory ingestion job started running on the local extraction LLM.
     /// Ingestion is singleton — this fires once, then a matching
     /// [`Self::MemoryIngestionCompleted`] follows when the job finishes.
@@ -92,10 +103,22 @@ pub enum DomainEvent {
 
     // ── Channels ────────────────────────────────────────────────────────
     /// An inbound channel message from the transport layer, ready for processing.
+    ///
+    /// `sender`, `reply_target`, and `thread_ts` are carried alongside
+    /// `channel` so the agent loop can derive per-sender conversation keys
+    /// the same way `channels::context::conversation_history_key` does for
+    /// other inbound paths — keying on `channel` alone collapses distinct
+    /// senders inside a shared channel into one cached session.
     ChannelInboundMessage {
         event_name: String,
         channel: String,
         message: String,
+        #[doc = "Originating user/account id within the channel. `None` for legacy publishers that don't surface it."]
+        sender: Option<String>,
+        #[doc = "Direct-message peer or group thread the reply should go to. `None` when the channel does not distinguish."]
+        reply_target: Option<String>,
+        #[doc = "Slack/Discord thread anchor when the message is in-thread. `None` for top-level messages."]
+        thread_ts: Option<String>,
         raw_data: serde_json::Value,
     },
     /// A message was received on a channel.
@@ -200,6 +223,34 @@ pub enum DomainEvent {
         session_id: String,
         success: bool,
         elapsed_ms: u64,
+    },
+
+    // ── Approval ────────────────────────────────────────────────────────
+    /// Agent attempted a tool call that produces an external side
+    /// effect; awaiting user approval. Published by `ApprovalGate`
+    /// before parking the tool-call future. Issue #1339.
+    ApprovalRequested {
+        /// Unique id used to correlate the decision back to the
+        /// parked future.
+        request_id: String,
+        /// Tool name being gated (e.g. `"composio"`, `"pushover"`).
+        tool_name: String,
+        /// Short human-readable summary of the action, redacted of
+        /// PII/secrets/message bodies (counts/shape only).
+        action_summary: String,
+        /// Redacted JSON arguments — also stripped of raw user content.
+        args_redacted: serde_json::Value,
+        /// Session id binding the request to the current core launch
+        /// so stale approvals cannot be replayed after restart.
+        session_id: String,
+    },
+    /// User decided a pending approval. Published by `approval_decide`
+    /// RPC handler after the gate's parked future resolves.
+    ApprovalDecided {
+        request_id: String,
+        tool_name: String,
+        /// `"approve_once"`, `"approve_always_for_tool"`, or `"deny"`.
+        decision: String,
     },
 
     // ── Webhooks ────────────────────────────────────────────────────────
@@ -366,6 +417,31 @@ pub enum DomainEvent {
         routed: bool,
     },
 
+    // ── Device pairing ──────────────────────────────────────────────────
+    /// A mobile device completed the X25519 handshake and is now paired.
+    DevicePaired {
+        channel_id: String,
+        device_pubkey: String,
+        label: Option<String>,
+    },
+    /// A paired device's tunnel session was revoked.
+    DeviceRevoked { channel_id: String },
+    /// The backend tunnel reported the peer (device) came online.
+    DevicePeerOnline { channel_id: String },
+    /// The backend tunnel reported the peer (device) went offline.
+    DevicePeerOffline { channel_id: String },
+    /// An encrypted tunnel frame arrived from the device.
+    DeviceTunnelFrame {
+        channel_id: String,
+        payload_b64: String,
+    },
+    /// The backend acknowledged `tunnel:register` with channel credentials.
+    DeviceTunnelRegistered {
+        channel_id: String,
+        pairing_token: String,
+        session_token: String,
+    },
+
     // ── Memory tree ─────────────────────────────────────────────────────
     /// A document (chat batch, email thread, or standalone document) was
     /// fully canonicalised and its chunks written to the memory tree.
@@ -413,6 +489,53 @@ pub enum DomainEvent {
         total_size: usize,
         /// Wall-clock seconds since epoch when the rebuild completed.
         rebuilt_at: f64,
+    },
+
+    // ── Desktop Companion ──────────────────────────────────────────────
+    /// A desktop companion session was started.
+    CompanionSessionStarted { session_id: String, ttl_secs: u64 },
+    /// The companion transitioned to a new state.
+    CompanionStateChanged {
+        session_id: String,
+        state: String,
+        previous_state: String,
+    },
+    /// A desktop companion session ended.
+    CompanionSessionEnded {
+        session_id: String,
+        reason: String,
+        turn_count: usize,
+    },
+
+    // ── MCP Clients ─────────────────────────────────────────────────────
+    /// A new MCP server was installed from the Smithery registry.
+    McpServerInstalled {
+        server_id: String,
+        qualified_name: String,
+    },
+    /// An MCP server subprocess connected and completed the initialize handshake.
+    McpServerConnected { server_id: String, tool_count: u32 },
+    /// An MCP server subprocess was disconnected or terminated.
+    McpServerDisconnected {
+        server_id: String,
+        reason: Option<String>,
+    },
+    /// An MCP client tool was invoked.
+    McpClientToolExecuted {
+        server_id: String,
+        tool_name: String,
+        success: bool,
+        elapsed_ms: u64,
+    },
+    /// The MCP setup agent asked the user for a secret value. The UI
+    /// subscribes to this and renders a native prompt; on submit it calls
+    /// `openhuman.mcp_setup_submit_secret`. `ref_id` is the opaque handle
+    /// returned to the agent; the raw secret value never traverses this
+    /// event.
+    McpSetupSecretRequested {
+        ref_id: String,
+        key_name: String,
+        prompt: String,
     },
 
     // ── System lifecycle ────────────────────────────────────────────────
@@ -463,6 +586,7 @@ impl DomainEvent {
             Self::MemoryStored { .. }
             | Self::MemoryRecalled { .. }
             | Self::MemorySyncRequested { .. }
+            | Self::MemorySyncStageChanged { .. }
             | Self::MemoryIngestionStarted { .. }
             | Self::MemoryIngestionCompleted { .. }
             | Self::DocumentCanonicalized { .. } => "memory",
@@ -511,6 +635,17 @@ impl DomainEvent {
 
             Self::NotificationIngested { .. } | Self::NotificationTriaged { .. } => "notification",
 
+            Self::DevicePaired { .. }
+            | Self::DeviceRevoked { .. }
+            | Self::DevicePeerOnline { .. }
+            | Self::DevicePeerOffline { .. }
+            | Self::DeviceTunnelFrame { .. }
+            | Self::DeviceTunnelRegistered { .. } => "device",
+
+            Self::CompanionSessionStarted { .. }
+            | Self::CompanionStateChanged { .. }
+            | Self::CompanionSessionEnded { .. } => "companion",
+
             Self::SystemStartup { .. }
             | Self::SystemShutdown { .. }
             | Self::SystemRestartRequested { .. }
@@ -519,6 +654,14 @@ impl DomainEvent {
             | Self::HealthRestarted { .. } => "system",
 
             Self::SessionExpired { .. } => "auth",
+
+            Self::ApprovalRequested { .. } | Self::ApprovalDecided { .. } => "approval",
+
+            Self::McpServerInstalled { .. }
+            | Self::McpServerConnected { .. }
+            | Self::McpServerDisconnected { .. }
+            | Self::McpClientToolExecuted { .. }
+            | Self::McpSetupSecretRequested { .. } => "mcp_client",
         }
     }
 }
